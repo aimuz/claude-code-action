@@ -1,4 +1,5 @@
 import fetch from "node-fetch";
+import type { RequestInit } from "node-fetch";
 import { GITEA_API_URL } from "./config";
 
 export type GiteaClient = {
@@ -7,7 +8,10 @@ export type GiteaClient = {
 
 export function createGiteaClient(token: string): GiteaClient {
   return {
-    async request(path, options = {}) {
+    async request<T = unknown>(
+      path: string,
+      options: RequestInit = {},
+    ): Promise<T> {
       const url = path.startsWith("http") ? path : `${GITEA_API_URL}${path}`;
       const res = await fetch(url, {
         ...options,
