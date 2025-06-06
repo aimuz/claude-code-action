@@ -56,6 +56,17 @@ inputs:
     required: false
     default: "false"
 
+  use_gitea:
+    description: "Enable the gitea MCP server"
+    required: false
+    default: "false"
+  gitea_host:
+    description: "Custom Gitea host for the gitea MCP server"
+    required: false
+  gitea_token:
+    description: "Gitea personal access token for the gitea MCP server"
+    required: false
+
   timeout_minutes:
     description: "Timeout in minutes for execution"
     required: false
