@@ -6,21 +6,43 @@
  */
 
 import * as core from "@actions/core";
-import { setupGitHubToken } from "../github/token";
-import { checkTriggerAction } from "../github/validation/trigger";
-import { checkHumanActor } from "../github/validation/actor";
-import { checkWritePermissions } from "../github/validation/permissions";
-import { createInitialComment } from "../github/operations/comments/create-initial";
-import { setupBranch } from "../github/operations/branch";
-import { updateTrackingComment } from "../github/operations/comments/update-with-branch";
 import { prepareMcpConfig } from "../mcp/install-mcp-server";
 import { createPrompt } from "../create-prompt";
-import { createOctokit } from "../github/api/client";
-import { fetchGitHubData } from "../github/data/fetcher";
-import { parseGitHubContext } from "../github/context";
+import { getPlatform } from "../platform";
 
 async function run() {
   try {
+    const platform = getPlatform();
+
+    if (platform === "gitea") {
+      await import("../gitea/api/client");
+      await import("../gitea/context");
+      await import("../gitea/validation/permissions");
+      await import("../gitea/operations/comments/create-initial");
+      await import("../gitea/operations/branch");
+      await import("../gitea/operations/comments/update-with-branch");
+
+      core.setFailed("Gitea platform support is not implemented yet.");
+      return;
+    }
+
+    const { setupGitHubToken } = await import("../github/token");
+    const { checkTriggerAction } = await import("../github/validation/trigger");
+    const { checkHumanActor } = await import("../github/validation/actor");
+    const { checkWritePermissions } = await import(
+      "../github/validation/permissions"
+    );
+    const { createInitialComment } = await import(
+      "../github/operations/comments/create-initial"
+    );
+    const { setupBranch } = await import("../github/operations/branch");
+    const { updateTrackingComment } = await import(
+      "../github/operations/comments/update-with-branch"
+    );
+    const { createOctokit } = await import("../github/api/client");
+    const { fetchGitHubData } = await import("../github/data/fetcher");
+    const { parseGitHubContext } = await import("../github/context");
+
     // Step 1: Setup GitHub token
     const githubToken = await setupGitHubToken();
     const octokit = createOctokit(githubToken);

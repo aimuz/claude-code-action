@@ -1,31 +1,66 @@
 #!/usr/bin/env bun
 
-import { createOctokit } from "../github/api/client";
 import * as fs from "fs/promises";
-import {
-  updateCommentBody,
-  type CommentUpdateInput,
-} from "../github/operations/comment-logic";
-import {
-  parseGitHubContext,
-  isPullRequestReviewCommentEvent,
-} from "../github/context";
-import { GITHUB_SERVER_URL } from "../github/api/config";
-import { checkAndDeleteEmptyBranch } from "../github/operations/branch-cleanup";
+import { getPlatform } from "../platform";
+import type { CommentUpdateInput } from "../github/operations/comment-logic";
 
 async function run() {
   try {
+    const platform = getPlatform();
+
+    let createClient: (token: string) => any;
+    let updateCommentBody: (input: any) => string;
+    let parseContext: () => any;
+    let isPRReviewCommentEvent: (ctx: any) => boolean;
+    let serverUrl: string;
+    let checkAndDeleteEmptyBranch: (
+      client: any,
+      owner: string,
+      repo: string,
+      branch: string | undefined,
+      baseBranch: string,
+    ) => Promise<{ shouldDeleteBranch: boolean; branchLink: string }>;
+
+    if (platform === "github") {
+      const { createOctokit } = await import("../github/api/client");
+      createClient = (token: string) => createOctokit(token);
+      const ctxMod = await import("../github/context");
+      parseContext = ctxMod.parseGitHubContext;
+      isPRReviewCommentEvent = ctxMod.isPullRequestReviewCommentEvent;
+      const cfgMod = await import("../github/api/config");
+      serverUrl = cfgMod.GITHUB_SERVER_URL;
+      const branchMod = await import("../github/operations/branch-cleanup");
+      checkAndDeleteEmptyBranch = branchMod.checkAndDeleteEmptyBranch;
+      const commentLogic = await import("../github/operations/comment-logic");
+      updateCommentBody = commentLogic.updateCommentBody;
+    } else {
+      const { createGiteaClient } = await import("../gitea/api/client");
+      createClient = (token: string) => createGiteaClient(token);
+      const ctxMod = await import("../gitea/context");
+      parseContext = ctxMod.parseGiteaContext;
+      isPRReviewCommentEvent = ctxMod.isPullRequestReviewCommentEvent;
+      const cfgMod = await import("../gitea/api/config");
+      serverUrl = cfgMod.GITEA_SERVER_URL;
+      const commentLogic = await import("../github/operations/comment-logic");
+      updateCommentBody = commentLogic.updateCommentBody;
+      checkAndDeleteEmptyBranch = async () => ({
+        shouldDeleteBranch: false,
+        branchLink: "",
+      });
+      console.error("Gitea platform support is not implemented yet.");
+      return;
+    }
+
     const commentId = parseInt(process.env.CLAUDE_COMMENT_ID!);
-    const githubToken = process.env.GITHUB_TOKEN!;
+    const token = process.env.GITHUB_TOKEN!;
     const claudeBranch = process.env.CLAUDE_BRANCH;
     const baseBranch = process.env.BASE_BRANCH || "main";
     const triggerUsername = process.env.TRIGGER_USERNAME;
 
-    const context = parseGitHubContext();
+    const context = parseContext();
     const { owner, repo } = context.repository;
-    const octokit = createOctokit(githubToken);
+    const octokit = createClient(token);
 
-    const serverUrl = GITHUB_SERVER_URL;
     const jobUrl = `${serverUrl}/${owner}/${repo}/actions/runs/${process.env.GITHUB_RUN_ID}`;
 
     let comment;
@@ -34,7 +69,7 @@ async function run() {
     try {
       // GitHub has separate ID namespaces for review comments and issue comments
       // We need to use the correct API based on the event type
-      if (isPullRequestReviewCommentEvent(context)) {
+      if (isPRReviewCommentEvent(context)) {
         // For PR review comments, use the pulls API
         console.log(`Fetching PR review comment ${commentId}`);
         const { data: prComment } = await octokit.rest.pulls.getReviewComment({
