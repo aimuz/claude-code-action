@@ -101,7 +101,6 @@ runs:
       run: |
         echo ${{ github.action_path }}
         echo "debug"
-        bun run ${{ github.action_path }}/src/entrypoints/prepare.ts
       env:
         TRIGGER_PHRASE: ${{ inputs.trigger_phrase }}
         ASSIGNEE_TRIGGER: ${{ inputs.assignee_trigger }}
