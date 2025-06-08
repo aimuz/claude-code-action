@@ -91,6 +91,9 @@ runs:
 
     - name: Install Dependencies
       shell: bash
+      run: |
+        cd ${{ github.action_path }}
+        bun install
 
     - name: Prepare action
       id: prepare
@@ -107,6 +110,3 @@ runs:
         OVERRIDE_GITHUB_TOKEN: ${{ inputs.github_token }}
         GITHUB_RUN_ID: ${{ github.run_id }}
         PLATFORM: ${{ inputs.platform }}
-      run: |
-        cd ${{ github.action_path }}
-        bun install
