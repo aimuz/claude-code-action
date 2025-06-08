@@ -99,6 +99,8 @@ runs:
       id: prepare
       shell: bash
       run: |
+        echo ${{ github.action_path }}
+        echo "debug"
         bun run ${{ github.action_path }}/src/entrypoints/prepare.ts
       env:
         TRIGGER_PHRASE: ${{ inputs.trigger_phrase }}
