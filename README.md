@@ -79,8 +79,10 @@ jobs:
 | `anthropic_model`     | **DEPRECATED**: Use `model` instead. Kept for backward compatibility.                                                | No       | -                   |
 | `use_bedrock`         | Use Amazon Bedrock with OIDC authentication instead of direct Anthropic API                                          | No       | `false`             |
 | `use_vertex`          | Use Google Vertex AI with OIDC authentication instead of direct Anthropic API                                        | No       | `false`             |
-| `use_gitea`           | Enable the gitea MCP server                                                                                          | No       | `false`             |
+| `use_gitea`           | Enable the gitea MCP server. `use_gitea: true` switches the action to Gitea mode                                     | No       | `false`             |
 | `gitea_host`          | Custom Gitea host for the gitea MCP server                                                                           | No       | `https://gitea.com` |
+| `gitea_api_url`       | Custom API endpoint for the gitea MCP server                                                                         | No       | -                   |
+| `gitea_server_url`    | Custom server URL for the gitea MCP server                                                                           | No       | -                   |
 | `gitea_token`         | Gitea personal access token for the gitea MCP server                                                                 | No       | -                   |
 | `allowed_tools`       | Additional tools for Claude to use (the base GitHub tools will always be included)                                   | No       | ""                  |
 | `disallowed_tools`    | Tools that Claude should never use                                                                                   | No       | ""                  |

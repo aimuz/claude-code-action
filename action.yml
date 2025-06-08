@@ -63,6 +63,12 @@ inputs:
   gitea_host:
     description: "Custom Gitea host for the gitea MCP server"
     required: false
+  gitea_api_url:
+    description: "Custom API endpoint for the gitea MCP server"
+    required: false
+  gitea_server_url:
+    description: "Custom server URL for the gitea MCP server"
+    required: false
   gitea_token:
     description: "Gitea personal access token for the gitea MCP server"
     required: false
@@ -110,6 +116,10 @@ runs:
         OVERRIDE_GITHUB_TOKEN: ${{ inputs.github_token }}
         GITHUB_RUN_ID: ${{ github.run_id }}
         PLATFORM: ${{ inputs.platform }}
+        USE_GITEA: ${{ inputs.use_gitea }}
+        GITEA_TOKEN: ${{ inputs.gitea_token }}
+        GITEA_API_URL: ${{ inputs.gitea_api_url }}
+        GITEA_SERVER_URL: ${{ inputs.gitea_server_url }}
 
     - name: Run Claude Code
       id: claude-code
@@ -173,6 +183,10 @@ runs:
         PREPARE_SUCCESS: ${{ steps.prepare.outcome == 'success' }}
         PREPARE_ERROR: ${{ steps.prepare.outputs.prepare_error || '' }}
         PLATFORM: ${{ inputs.platform }}
+        USE_GITEA: ${{ inputs.use_gitea }}
+        GITEA_TOKEN: ${{ inputs.gitea_token }}
+        GITEA_API_URL: ${{ inputs.gitea_api_url }}
+        GITEA_SERVER_URL: ${{ inputs.gitea_server_url }}
 
     - name: Display Claude Code Report
       if: steps.prepare.outputs.contains_trigger == 'true' && steps.claude-code.outputs.execution_file != ''
