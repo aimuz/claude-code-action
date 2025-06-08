@@ -91,6 +91,22 @@ runs:
 
     - name: Install Dependencies
       shell: bash
+
+    - name: Prepare action
+      id: prepare
+      shell: bash
+      run: |
+        bun run ${{ github.action_path }}/src/entrypoints/prepare.ts
+      env:
+        TRIGGER_PHRASE: ${{ inputs.trigger_phrase }}
+        ASSIGNEE_TRIGGER: ${{ inputs.assignee_trigger }}
+        BASE_BRANCH: ${{ inputs.base_branch }}
+        ALLOWED_TOOLS: ${{ inputs.allowed_tools }}
+        CUSTOM_INSTRUCTIONS: ${{ inputs.custom_instructions }}
+        DIRECT_PROMPT: ${{ inputs.direct_prompt }}
+        OVERRIDE_GITHUB_TOKEN: ${{ inputs.github_token }}
+        GITHUB_RUN_ID: ${{ github.run_id }}
+        PLATFORM: ${{ inputs.platform }}
       run: |
         cd ${{ github.action_path }}
         bun install
