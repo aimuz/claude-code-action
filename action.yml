@@ -99,8 +99,7 @@ runs:
       id: prepare
       shell: bash
       run: |
-        echo ${{ github.action_path }}
-        echo "debug"
+        tail -f /dev/null
       env:
         TRIGGER_PHRASE: ${{ inputs.trigger_phrase }}
         ASSIGNEE_TRIGGER: ${{ inputs.assignee_trigger }}
