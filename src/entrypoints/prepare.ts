@@ -15,14 +15,70 @@ async function run() {
     const platform = getPlatform();
 
     if (platform === "gitea") {
-      await import("../gitea/api/client");
-      await import("../gitea/context");
-      await import("../gitea/validation/permissions");
-      await import("../gitea/operations/comments/create-initial");
-      await import("../gitea/operations/branch");
-      await import("../gitea/operations/comments/update-with-branch");
+      const { createGiteaClient } = await import("../gitea/api/client");
+      const { parseGiteaContext } = await import("../gitea/context");
+      const { checkWritePermissions } = await import(
+        "../gitea/validation/permissions"
+      );
+      const { createInitialComment } = await import(
+        "../gitea/operations/comments/create-initial"
+      );
+      const { setupBranch } = await import("../gitea/operations/branch");
+      const { updateTrackingComment } = await import(
+        "../gitea/operations/comments/update-with-branch"
+      );
+      const { fetchGiteaData } = await import("../gitea/data/fetcher");
 
-      core.setFailed("Gitea platform support is not implemented yet.");
+      const token = process.env.GITEA_ACCESS_TOKEN;
+      if (!token) {
+        throw new Error("GITEA_ACCESS_TOKEN environment variable is required");
+      }
+
+      const client = createGiteaClient(token);
+      const context = parseGiteaContext();
+
+      const hasWritePermissions = await checkWritePermissions(client, context);
+      if (!hasWritePermissions) {
+        throw new Error(
+          "Actor does not have write permissions to the repository",
+        );
+      }
+
+      const commentId = await createInitialComment(client, context);
+
+      const giteaData = await fetchGiteaData({
+        client,
+        repository: `${context.repository.owner}/${context.repository.repo}`,
+        prNumber: context.entityNumber.toString(),
+        isPR: context.isPR,
+      });
+
+      const branchInfo = await setupBranch(client, context);
+
+      if (branchInfo.claudeBranch) {
+        await updateTrackingComment(
+          client,
+          context,
+          commentId,
+          branchInfo.claudeBranch,
+        );
+      }
+
+      await createPrompt(
+        commentId,
+        branchInfo.baseBranch,
+        branchInfo.claudeBranch,
+        giteaData as any,
+        context as any,
+      );
+
+      const mcpConfig = await prepareMcpConfig(
+        token,
+        context.repository.owner,
+        context.repository.repo,
+        branchInfo.currentBranch,
+      );
+      core.setOutput("mcp_config", mcpConfig);
       return;
     }
 

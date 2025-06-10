@@ -47,21 +47,26 @@ async function run() {
         shouldDeleteBranch: false,
         branchLink: "",
       });
-      console.error("Gitea platform support is not implemented yet.");
-      return;
     }
 
     const commentId = parseInt(process.env.CLAUDE_COMMENT_ID!);
-    const token = process.env.GITHUB_TOKEN!;
+    const token =
+      platform === "github"
+        ? process.env.GITHUB_TOKEN!
+        : process.env.GITEA_ACCESS_TOKEN!;
     const claudeBranch = process.env.CLAUDE_BRANCH;
     const baseBranch = process.env.BASE_BRANCH || "main";
     const triggerUsername = process.env.TRIGGER_USERNAME;
 
     const context = parseContext();
     const { owner, repo } = context.repository;
-    const octokit = createClient(token);
+    const apiClient = createClient(token);
 
-    const jobUrl = `${serverUrl}/${owner}/${repo}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+    const runId =
+      platform === "github"
+        ? process.env.GITHUB_RUN_ID
+        : process.env.GITEA_RUN_ID;
+    const jobUrl = `${serverUrl}/${owner}/${repo}/actions/runs/${runId}`;
 
     let comment;
     let isPRReviewComment = false;
@@ -72,12 +77,19 @@ async function run() {
       if (isPRReviewCommentEvent(context)) {
         // For PR review comments, use the pulls API
         console.log(`Fetching PR review comment ${commentId}`);
-        const { data: prComment } = await octokit.rest.pulls.getReviewComment({
-          owner,
-          repo,
-          comment_id: commentId,
-        });
-        comment = prComment;
+        if (platform === "github") {
+          const { data: prComment } =
+            await apiClient.rest.pulls.getReviewComment({
+              owner,
+              repo,
+              comment_id: commentId,
+            });
+          comment = prComment;
+        } else {
+          comment = await apiClient.request(
+            `/repos/${owner}/${repo}/pulls/comments/${commentId}`,
+          );
+        }
         isPRReviewComment = true;
         console.log("Successfully fetched as PR review comment");
       }
@@ -85,12 +97,20 @@ async function run() {
       // For all other event types, use the issues API
       if (!comment) {
         console.log(`Fetching issue comment ${commentId}`);
-        const { data: issueComment } = await octokit.rest.issues.getComment({
-          owner,
-          repo,
-          comment_id: commentId,
-        });
-        comment = issueComment;
+        if (platform === "github") {
+          const { data: issueComment } = await apiClient.rest.issues.getComment(
+            {
+              owner,
+              repo,
+              comment_id: commentId,
+            },
+          );
+          comment = issueComment;
+        } else {
+          comment = await apiClient.request(
+            `/repos/${owner}/${repo}/issues/comments/${commentId}`,
+          );
+        }
         isPRReviewComment = false;
         console.log("Successfully fetched as issue comment");
       }
@@ -104,14 +124,21 @@ async function run() {
 
       // Try to get the PR info to understand the comment structure
       try {
-        const { data: pr } = await octokit.rest.pulls.get({
-          owner,
-          repo,
-          pull_number: context.entityNumber,
-        });
-        console.log(`PR state: ${pr.state}`);
-        console.log(`PR comments count: ${pr.comments}`);
-        console.log(`PR review comments count: ${pr.review_comments}`);
+        if (platform === "github") {
+          const { data: pr } = await apiClient.rest.pulls.get({
+            owner,
+            repo,
+            pull_number: context.entityNumber,
+          });
+          console.log(`PR state: ${pr.state}`);
+          console.log(`PR comments count: ${pr.comments}`);
+          console.log(`PR review comments count: ${pr.review_comments}`);
+        } else {
+          const pr = await apiClient.request(
+            `/repos/${owner}/${repo}/pulls/${context.entityNumber}`,
+          );
+          console.log(`PR state: ${pr.state}`);
+        }
       } catch {
         console.error("Could not fetch PR info for debugging");
       }
@@ -123,7 +150,7 @@ async function run() {
 
     // Check if we need to add branch link for new branches
     const { shouldDeleteBranch, branchLink } = await checkAndDeleteEmptyBranch(
-      octokit,
+      apiClient,
       owner,
       repo,
       claudeBranch,
@@ -142,20 +169,21 @@ async function run() {
       const containsPRUrl = currentBody.match(prUrlPattern);
 
       if (!containsPRUrl) {
-        // Check if there are changes to the branch compared to the default branch
         try {
-          const { data: comparison } =
-            await octokit.rest.repos.compareCommitsWithBasehead({
-              owner,
-              repo,
-              basehead: `${baseBranch}...${claudeBranch}`,
-            });
+          let hasChanges = true;
+          if (platform === "github") {
+            const { data: comparison } =
+              await apiClient.rest.repos.compareCommitsWithBasehead({
+                owner,
+                repo,
+                basehead: `${baseBranch}...${claudeBranch}`,
+              });
+            hasChanges =
+              comparison.total_commits > 0 ||
+              (comparison.files && comparison.files.length > 0);
+          }
 
-          // If there are changes (commits or file changes), add the PR URL
-          if (
-            comparison.total_commits > 0 ||
-            (comparison.files && comparison.files.length > 0)
-          ) {
+          if (hasChanges) {
             const entityType = context.isPR ? "PR" : "Issue";
             const prTitle = encodeURIComponent(
               `${entityType} #${context.entityNumber}: Changes from Claude`,
@@ -168,7 +196,6 @@ async function run() {
           }
         } catch (error) {
           console.error("Error checking for changes in branch:", error);
-          // Don't fail the entire update if we can't check for changes
         }
       }
     }
@@ -242,19 +269,41 @@ async function run() {
     // Update the comment using the appropriate API
     try {
       if (isPRReviewComment) {
-        await octokit.rest.pulls.updateReviewComment({
-          owner,
-          repo,
-          comment_id: commentId,
-          body: updatedBody,
-        });
+        if (platform === "github") {
+          await apiClient.rest.pulls.updateReviewComment({
+            owner,
+            repo,
+            comment_id: commentId,
+            body: updatedBody,
+          });
+        } else {
+          await apiClient.request(
+            `/repos/${owner}/${repo}/pulls/comments/${commentId}`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ body: updatedBody }),
+            },
+          );
+        }
       } else {
-        await octokit.rest.issues.updateComment({
-          owner,
-          repo,
-          comment_id: commentId,
-          body: updatedBody,
-        });
+        if (platform === "github") {
+          await apiClient.rest.issues.updateComment({
+            owner,
+            repo,
+            comment_id: commentId,
+            body: updatedBody,
+          });
+        } else {
+          await apiClient.request(
+            `/repos/${owner}/${repo}/issues/comments/${commentId}`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ body: updatedBody }),
+            },
+          );
+        }
       }
       console.log(
         `✅ Updated ${isPRReviewComment ? "PR review" : "issue"} comment ${commentId} with job link`,
